@@ -999,7 +999,7 @@ class View {
 			$dirLength = strlen($path);
 			foreach ($mounts as $mount) {
 				$mountPoint = $mount->getMountPoint();
-				$subStorage = Filesystem::getStorage($mountPoint);
+				$subStorage = $mount->getStorage();
 				if ($subStorage) {
 					$subCache = $subStorage->getCache('');
 
