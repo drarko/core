@@ -9,7 +9,13 @@
  * @license AGPL3
  */
 
-class OC_Connector_Sabre_ExceptionLoggerPlugin extends \Sabre\DAV\ServerPlugin
+namespace OC\Connector\Sabre;
+
+use OCP\Util;
+use Sabre\DAV\Server;
+use Sabre\DAV\ServerPlugin;
+
+class ExceptionLoggerPlugin extends ServerPlugin
 {
 	private $nonFatalExceptions = array(
 		'Sabre\DAV\Exception\NotAuthenticated' => true,
@@ -39,10 +45,10 @@ class OC_Connector_Sabre_ExceptionLoggerPlugin extends \Sabre\DAV\ServerPlugin
 	 *
 	 * This method should set up the required event subscriptions.
 	 *
-	 * @param \Sabre\DAV\Server $server
+	 * @param Server $server
 	 * @return void
 	 */
-	public function initialize(\Sabre\DAV\Server $server) {
+	public function initialize(Server $server) {
 
 		$server->subscribeEvent('exception', array($this, 'logException'), 10);
 	}
@@ -54,10 +60,10 @@ class OC_Connector_Sabre_ExceptionLoggerPlugin extends \Sabre\DAV\ServerPlugin
 	 */
 	public function logException($e) {
 		$exceptionClass = get_class($e);
-		$level = \OCP\Util::FATAL;
+		$level = Util::FATAL;
 		if (isset($this->nonFatalExceptions[$exceptionClass])) {
-			$level = \OCP\Util::DEBUG;
+			$level = Util::DEBUG;
 		}
-		\OCP\Util::logException($this->appName, $e, $level);
+		Util::logException($this->appName, $e, $level);
 	}
 }

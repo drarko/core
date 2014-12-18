@@ -1,4 +1,13 @@
 <?php
+
+namespace OC\Connector\Sabre;
+
+use OCP\Files\FileInfo;
+use OCP\Files\StorageNotAvailableException;
+use Sabre\DAV\Exception\InsufficientStorage;
+use Sabre\DAV\Exception\ServiceUnavailable;
+use Sabre\DAV\Server;
+use Sabre\DAV\ServerPlugin;
 use Sabre\DAV\URLUtil;
 
 /**
@@ -8,7 +17,7 @@ use Sabre\DAV\URLUtil;
  * @copyright Copyright (C) 2012 entreCables S.L. All rights reserved.
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
-class OC_Connector_Sabre_QuotaPlugin extends \Sabre\DAV\ServerPlugin {
+class QuotaPlugin extends ServerPlugin {
 
 	/**
 	 * @var \OC\Files\View
@@ -18,7 +27,7 @@ class OC_Connector_Sabre_QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 	/**
 	 * Reference to main server object
 	 *
-	 * @var \Sabre\DAV\Server
+	 * @var Server
 	 */
 	private $server;
 
@@ -37,10 +46,10 @@ class OC_Connector_Sabre_QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 	 *
 	 * This method should set up the requires event subscriptions.
 	 *
-	 * @param \Sabre\DAV\Server $server
+	 * @param Server $server
 	 * @return void
 	 */
-	public function initialize(\Sabre\DAV\Server $server) {
+	public function initialize(Server $server) {
 
 		$this->server = $server;
 
@@ -53,7 +62,7 @@ class OC_Connector_Sabre_QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 	 *
 	 * @param string $uri
 	 * @param null $data
-	 * @throws \Sabre\DAV\Exception\InsufficientStorage
+	 * @throws InsufficientStorage
 	 * @return bool
 	 */
 	public function checkQuota($uri, $data = null) {
@@ -65,18 +74,18 @@ class OC_Connector_Sabre_QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 			list($parentUri, $newName) = URLUtil::splitPath($uri);
 			$req = $this->server->httpRequest;
 			if ($req->getHeader('OC-Chunked')) {
-				$info = OC_FileChunking::decodeName($newName);
-				$chunkHandler = new OC_FileChunking($info);
+				$info = \OC_FileChunking::decodeName($newName);
+				$chunkHandler = new \OC_FileChunking($info);
 				// subtract the already uploaded size to see whether
 				// there is still enough space for the remaining chunks
 				$length -= $chunkHandler->getCurrentSize();
 			}
 			$freeSpace = $this->getFreeSpace($parentUri);
-			if ($freeSpace !== \OCP\Files\FileInfo::SPACE_UNKNOWN && $length > $freeSpace) {
+			if ($freeSpace !== FileInfo::SPACE_UNKNOWN && $length > $freeSpace) {
 				if (isset($chunkHandler)) {
 					$chunkHandler->cleanup();
 				}
-				throw new \Sabre\DAV\Exception\InsufficientStorage();
+				throw new InsufficientStorage();
 			}
 		}
 		return true;
@@ -100,13 +109,14 @@ class OC_Connector_Sabre_QuotaPlugin extends \Sabre\DAV\ServerPlugin {
 	/**
 	 * @param string $parentUri
 	 * @return mixed
+	 * @throws ServiceUnavailable
 	 */
 	public function getFreeSpace($parentUri) {
 		try {
 			$freeSpace = $this->view->free_space($parentUri);
 			return $freeSpace;
-		} catch (\OCP\Files\StorageNotAvailableException $e) {
-			throw new \Sabre\DAV\Exception\ServiceUnavailable($e->getMessage());
+		} catch (StorageNotAvailableException $e) {
+			throw new ServiceUnavailable($e->getMessage());
 		}
 	}
 }

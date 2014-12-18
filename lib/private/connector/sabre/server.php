@@ -9,8 +9,18 @@
  * @license http://code.google.com/p/sabredav/wiki/License Modified BSD License
  */
 
+namespace OC\Connector\Sabre;
+use Sabre\DAV\URLUtil;
+use Sabre\DAV\ICollection;
+use Sabre\DAV\IProperties;
+use Sabre\DAV\Property\GetLastModified;
+use Sabre\DAV\IFile;
+use Sabre\DAV\IQuota;
+use Sabre\DAV\Property\SupportedReportSet;
+use Sabre\DAV\Property\ResourceType;
+
 /**
- * Class OC_Connector_Sabre_Server
+ * Class \OC\Connector\Sabre\Server
  *
  * This class reimplements some methods from @see \Sabre\DAV\Server.
  *
@@ -26,7 +36,7 @@
  *
  * @see \Sabre\DAV\Server
  */
-class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
+class Server extends \Sabre\DAV\Server {
 
 	/**
 	 * @var string
@@ -59,8 +69,8 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 		// chunked upload handling
 		if (isset($_SERVER['HTTP_OC_CHUNKED'])) {
 			$filePath = parent::getRequestUri();
-			list($path, $name) = \Sabre\DAV\URLUtil::splitPath($filePath);
-			$info = OC_FileChunking::decodeName($name);
+			list($path, $name) = URLUtil::splitPath($filePath);
+			$info = \OC_FileChunking::decodeName($name);
 			if (!empty($info)) {
 				$filePath = $path . '/' . $info['name'];
 				$this->overLoadedUri = $filePath;
@@ -82,7 +92,7 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 	protected function httpGet($uri) {
 		$range = $this->getHTTPRange();
 
-		if (OC_App::isEnabled('files_encryption') && $range) {
+		if (\OC_App::isEnabled('files_encryption') && $range) {
 			// encryption does not support range requests
 			$this->ignoreRangeHeader = true;	
 		}
@@ -133,7 +143,7 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 	private function addPathNodesRecursively(&$nodes, $path) {
 		foreach($this->tree->getChildren($path) as $childNode) {
 			$nodes[$path . '/' . $childNode->getName()] = $childNode;
-			if ($childNode instanceof \Sabre\DAV\ICollection)
+			if ($childNode instanceof ICollection)
 				$this->addPathNodesRecursively($nodes, $path . '/' . $childNode->getName());
 		}
 	}
@@ -150,10 +160,10 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 		$nodes = array(
 			$path => $parentNode
 		);
-		if ($depth==1 && $parentNode instanceof \Sabre\DAV\ICollection) {
+		if ($depth==1 && $parentNode instanceof ICollection) {
 			foreach($this->tree->getChildren($path) as $childNode)
 				$nodes[$path . '/' . $childNode->getName()] = $childNode;
-		} else if ($depth == self::DEPTH_INFINITY && $parentNode instanceof \Sabre\DAV\ICollection) {
+		} else if ($depth == self::DEPTH_INFINITY && $parentNode instanceof ICollection) {
 			$this->addPathNodesRecursively($nodes, $path);
 		}
 
@@ -201,7 +211,7 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 
 			if (count($currentPropertyNames) > 0) {
 
-				if ($node instanceof \Sabre\DAV\IProperties) {
+				if ($node instanceof IProperties) {
 					$nodeProperties = $node->getProperties($currentPropertyNames);
 
 					// The getProperties method may give us too much,
@@ -226,9 +236,9 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 				if (isset($newProperties[200][$prop])) continue;
 
 				switch($prop) {
-					case '{DAV:}getlastmodified'       : if ($node->getLastModified()) $newProperties[200][$prop] = new \Sabre\DAV\Property\GetLastModified($node->getLastModified()); break;
+					case '{DAV:}getlastmodified'       : if ($node->getLastModified()) $newProperties[200][$prop] = new GetLastModified($node->getLastModified()); break;
 					case '{DAV:}getcontentlength'      :
-						if ($node instanceof \Sabre\DAV\IFile) {
+						if ($node instanceof IFile) {
 							$size = $node->getSize();
 							if (!is_null($size)) {
 								$newProperties[200][$prop] = 0 + $size;
@@ -236,28 +246,28 @@ class OC_Connector_Sabre_Server extends Sabre\DAV\Server {
 						}
 						break;
 					case '{DAV:}quota-used-bytes'      :
-						if ($node instanceof \Sabre\DAV\IQuota) {
+						if ($node instanceof IQuota) {
 							$quotaInfo = $node->getQuotaInfo();
 							$newProperties[200][$prop] = $quotaInfo[0];
 						}
 						break;
 					case '{DAV:}quota-available-bytes' :
-						if ($node instanceof \Sabre\DAV\IQuota) {
+						if ($node instanceof IQuota) {
 							$quotaInfo = $node->getQuotaInfo();
 							$newProperties[200][$prop] = $quotaInfo[1];
 						}
 						break;
-					case '{DAV:}getetag'               : if ($node instanceof \Sabre\DAV\IFile && $etag = $node->getETag())  $newProperties[200][$prop] = $etag; break;
-					case '{DAV:}getcontenttype'        : if ($node instanceof \Sabre\DAV\IFile && $ct = $node->getContentType())  $newProperties[200][$prop] = $ct; break;
+					case '{DAV:}getetag'               : if ($node instanceof IFile && $etag = $node->getETag())  $newProperties[200][$prop] = $etag; break;
+					case '{DAV:}getcontenttype'        : if ($node instanceof IFile && $ct = $node->getContentType())  $newProperties[200][$prop] = $ct; break;
 					case '{DAV:}supported-report-set'  :
 						$reports = array();
 						foreach($this->plugins as $plugin) {
 							$reports = array_merge($reports, $plugin->getSupportedReportSet($myPath));
 						}
-						$newProperties[200][$prop] = new \Sabre\DAV\Property\SupportedReportSet($reports);
+						$newProperties[200][$prop] = new SupportedReportSet($reports);
 						break;
 					case '{DAV:}resourcetype' :
-						$newProperties[200]['{DAV:}resourcetype'] = new \Sabre\DAV\Property\ResourceType();
+						$newProperties[200]['{DAV:}resourcetype'] = new ResourceType();
 						foreach($this->resourceTypeMapping as $className => $resourceType) {
 							if ($node instanceof $className) $newProperties[200]['{DAV:}resourcetype']->add($resourceType);
 						}

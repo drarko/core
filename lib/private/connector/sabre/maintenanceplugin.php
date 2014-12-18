@@ -9,13 +9,18 @@
  * @license AGPL3
  */
 
-class OC_Connector_Sabre_MaintenancePlugin extends \Sabre\DAV\ServerPlugin
-{
+namespace OC\Connector\Sabre;
+
+use Sabre\DAV\Exception\ServiceUnavailable;
+use Sabre\DAV\Server;
+use Sabre\DAV\ServerPlugin;
+
+class MaintenancePlugin extends ServerPlugin {
 
 	/**
 	 * Reference to main server object
 	 *
-	 * @var \Sabre\DAV\Server
+	 * @var Server
 	 */
 	private $server;
 
@@ -27,10 +32,10 @@ class OC_Connector_Sabre_MaintenancePlugin extends \Sabre\DAV\ServerPlugin
 	 *
 	 * This method should set up the required event subscriptions.
 	 *
-	 * @param \Sabre\DAV\Server $server
+	 * @param Server $server
 	 * @return void
 	 */
-	public function initialize(\Sabre\DAV\Server $server) {
+	public function initialize(Server $server) {
 
 		$this->server = $server;
 		$this->server->subscribeEvent('beforeMethod', array($this, 'checkMaintenanceMode'), 10);
@@ -40,16 +45,16 @@ class OC_Connector_Sabre_MaintenancePlugin extends \Sabre\DAV\ServerPlugin
 	 * This method is called before any HTTP method and returns http status code 503
 	 * in case the system is in maintenance mode.
 	 *
-	 * @throws \Sabre\DAV\Exception\ServiceUnavailable
+	 * @throws ServiceUnavailable
 	 * @internal param string $method
 	 * @return bool
 	 */
 	public function checkMaintenanceMode() {
-		if (OC_Config::getValue('maintenance', false)) {
-			throw new \Sabre\DAV\Exception\ServiceUnavailable();
+		if (\OC_Config::getValue('maintenance', false)) {
+			throw new ServiceUnavailable();
 		}
-		if (OC::checkUpgrade(false)) {
-			throw new \Sabre\DAV\Exception\ServiceUnavailable('Upgrade needed');
+		if (\OC::checkUpgrade(false)) {
+			throw new ServiceUnavailable('Upgrade needed');
 		}
 
 		return true;

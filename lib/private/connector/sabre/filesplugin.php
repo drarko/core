@@ -9,8 +9,14 @@
  * @license AGPL3
  */
 
-class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
-{
+namespace OC\Connector\Sabre;
+
+use Sabre\DAV\INode;
+use Sabre\DAV\Server;
+use Sabre\DAV\ServerPlugin;
+use Sabre\DAV\URLUtil;
+
+class FilesPlugin extends ServerPlugin {
 
 	// namespace
 	const NS_OWNCLOUD = 'http://owncloud.org/ns';
@@ -18,7 +24,7 @@ class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
 	/**
 	 * Reference to main server object
 	 *
-	 * @var \Sabre\DAV\Server
+	 * @var Server
 	 */
 	private $server;
 
@@ -30,10 +36,10 @@ class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
 	 *
 	 * This method should set up the required event subscriptions.
 	 *
-	 * @param \Sabre\DAV\Server $server
+	 * @param Server $server
 	 * @return void
 	 */
-	public function initialize(\Sabre\DAV\Server $server) {
+	public function initialize(Server $server) {
 
 		$server->xmlNamespaces[self::NS_OWNCLOUD] = 'oc';
 		$server->protectedProperties[] = '{' . self::NS_OWNCLOUD . '}id';
@@ -50,14 +56,14 @@ class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
 	 * Adds all ownCloud-specific properties
 	 *
 	 * @param string $path
-	 * @param \Sabre\DAV\INode $node
+	 * @param INode $node
 	 * @param array $requestedProperties
 	 * @param array $returnedProperties
 	 * @return void
 	 */
-	public function beforeGetProperties($path, \Sabre\DAV\INode $node, array &$requestedProperties, array &$returnedProperties) {
+	public function beforeGetProperties($path, INode $node, array &$requestedProperties, array &$returnedProperties) {
 
-		if ($node instanceof OC_Connector_Sabre_Node) {
+		if ($node instanceof Node) {
 
 			$fileIdPropertyName = '{' . self::NS_OWNCLOUD . '}id';
 			$permissionsPropertyName = '{' . self::NS_OWNCLOUD . '}permissions';
@@ -68,7 +74,7 @@ class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
 				unset($requestedProperties[array_search($permissionsPropertyName, $requestedProperties)]);
 			}
 
-			/** @var $node OC_Connector_Sabre_Node */
+			/** @var $node Node */
 			$fileId = $node->getFileId();
 			if (!is_null($fileId)) {
 				$returnedProperties[200][$fileIdPropertyName] = $fileId;
@@ -80,24 +86,24 @@ class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
 			}
 		}
 
-		if ($node instanceof OC_Connector_Sabre_Directory) {
+		if ($node instanceof Directory) {
 			$sizePropertyName = '{' . self::NS_OWNCLOUD . '}size';
 
-			/** @var $node OC_Connector_Sabre_Directory */
+			/** @var $node Directory */
 			$returnedProperties[200][$sizePropertyName] = $node->getSize();
 		}
 	}
 
 	/**
 	 * @param string $filePath
-	 * @param \Sabre\DAV\INode $node
+	 * @param INode $node
 	 * @throws \Sabre\DAV\Exception\BadRequest
 	 */
-	public function sendFileIdHeader($filePath, \Sabre\DAV\INode $node = null) {
+	public function sendFileIdHeader($filePath, INode $node = null) {
 		// chunked upload handling
 		if (isset($_SERVER['HTTP_OC_CHUNKED'])) {
-			list($path, $name) = \Sabre\DAV\URLUtil::splitPath($filePath);
-			$info = OC_FileChunking::decodeName($name);
+			list($path, $name) = URLUtil::splitPath($filePath);
+			$info = \OC_FileChunking::decodeName($name);
 			if (!empty($info)) {
 				$filePath = $path . '/' . $info['name'];
 			}
@@ -108,7 +114,7 @@ class OC_Connector_Sabre_FilesPlugin extends \Sabre\DAV\ServerPlugin
 			return;
 		}
 		$node = $this->server->tree->getNodeForPath($filePath);
-		if ($node instanceof OC_Connector_Sabre_Node) {
+		if ($node instanceof Node) {
 			$fileId = $node->getFileId();
 			if (!is_null($fileId)) {
 				$this->server->httpResponse->setHeader('OC-FileId', $fileId);

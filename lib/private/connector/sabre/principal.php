@@ -7,7 +7,14 @@
  * See the COPYING-README file.
  */
 
-class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\BackendInterface {
+namespace OC\Connector\Sabre;
+
+use OCP\Config;
+use Sabre\DAV\Exception;
+use Sabre\DAV\URLUtil;
+use Sabre\DAVACL\PrincipalBackend\BackendInterface;
+
+class Principal implements BackendInterface {
 	/**
 	 * Returns a list of principals based on a prefix.
 	 *
@@ -25,7 +32,7 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 		$principals = array();
 
 		if ($prefixPath == 'principals') {
-			foreach(OC_User::getUsers() as $user) {
+			foreach(\OC_User::getUsers() as $user) {
 
 				$user_uri = 'principals/'.$user;
 				$principal = array(
@@ -33,7 +40,7 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 					'{DAV:}displayname' => $user,
 				);
 
-				$email= \OCP\Config::getUserValue($user, 'settings', 'email');
+				$email= Config::getUserValue($user, 'settings', 'email');
 				if($email) {
 					$principal['{http://sabredav.org/ns}email-address'] = $email;
 				}
@@ -56,14 +63,14 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	public function getPrincipalByPath($path) {
 		list($prefix, $name) = explode('/', $path);
 
-		if ($prefix == 'principals' && OC_User::userExists($name)) {
+		if ($prefix == 'principals' && \OC_User::userExists($name)) {
 
 			$principal = array(
 				'uri' => 'principals/'.$name,
 				'{DAV:}displayname' => $name,
 			);
 
-			$email= \OCP\Config::getUserValue($user, 'settings', 'email');
+			$email= Config::getUserValue($user, 'settings', 'email');
 			if($email) {
 				$principal['{http://sabredav.org/ns}email-address'] = $email;
 			}
@@ -79,12 +86,13 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 *
 	 * @param string $principal
 	 * @return string[]
+	 * @throws Exception
 	 */
 	public function getGroupMemberSet($principal) {
 		// TODO: for now the group principal has only one member, the user itself
 		$principal = $this->getPrincipalByPath($principal);
 		if (!$principal) {
-			throw new \Sabre\DAV\Exception('Principal not found');
+			throw new Exception('Principal not found');
 		}
 
 		return array(
@@ -97,15 +105,16 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 *
 	 * @param string $principal
 	 * @return array
+	 * @throws Exception
 	 */
 	public function getGroupMembership($principal) {
-		list($prefix, $name) = \Sabre\DAV\URLUtil::splitPath($principal);
+		list($prefix, $name) = URLUtil::splitPath($principal);
 
 		$group_membership = array();
 		if ($prefix == 'principals') {
 			$principal = $this->getPrincipalByPath($principal);
 			if (!$principal) {
-				throw new \Sabre\DAV\Exception('Principal not found');
+				throw new Exception('Principal not found');
 			}
 
 			// TODO: for now the user principal has only its own groups
@@ -129,9 +138,10 @@ class OC_Connector_Sabre_Principal implements \Sabre\DAVACL\PrincipalBackend\Bac
 	 * @param string $principal
 	 * @param array $members
 	 * @return void
+	 * @throws Exception
 	 */
 	public function setGroupMemberSet($principal, array $members) {
-		throw new \Sabre\DAV\Exception('Setting members of the group is not supported yet');
+		throw new Exception('Setting members of the group is not supported yet');
 	}
 
 	function updatePrincipal($path, $mutations) {

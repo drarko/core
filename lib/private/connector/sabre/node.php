@@ -1,6 +1,4 @@
 <?php
-use Sabre\DAV\URLUtil;
-
 /**
  * ownCloud
  *
@@ -21,7 +19,19 @@ use Sabre\DAV\URLUtil;
  * License along with this library.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\IProperties {
+
+namespace OC\Connector\Sabre;
+
+use OC\Files\Filesystem;
+use OCP\Files\FileInfo;
+use OCP\Util;
+use Sabre\DAV\Exception\BadRequest;
+use Sabre\DAV\Exception\Forbidden;
+use Sabre\DAV\INode;
+use Sabre\DAV\IProperties;
+use Sabre\DAV\URLUtil;
+
+abstract class Node implements INode, IProperties {
 	const GETETAG_PROPERTYNAME = '{DAV:}getetag';
 	const LASTMODIFIED_PROPERTYNAME = '{DAV:}lastmodified';
 
@@ -52,14 +62,14 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 	protected $property_cache = null;
 
 	/**
-	 * @var \OCP\Files\FileInfo
+	 * @var FileInfo
 	 */
 	protected $info;
 
 	/**
 	 * Sets up the node, expects a full path name
 	 * @param \OC\Files\View $view
-	 * @param \OCP\Files\FileInfo $info
+	 * @param FileInfo $info
 	 */
 	public function __construct($view, $info) {
 		$this->fileView = $view;
@@ -82,21 +92,21 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 	/**
 	 * Renames the node
 	 * @param string $name The new name
-	 * @throws \Sabre\DAV\Exception\BadRequest
-	 * @throws \Sabre\DAV\Exception\Forbidden
+	 * @throws BadRequest
+	 * @throws Forbidden
 	 */
 	public function setName($name) {
 
 		// rename is only allowed if the update privilege is granted
 		if (!$this->info->isUpdateable()) {
-			throw new \Sabre\DAV\Exception\Forbidden();
+			throw new Forbidden();
 		}
 
 		list($parentPath,) = URLUtil::splitPath($this->path);
 		list(, $newName) = URLUtil::splitPath($name);
 
-		if (!\OCP\Util::isValidFileName($newName)) {
-			throw new \Sabre\DAV\Exception\BadRequest();
+		if (!Util::isValidFileName($newName)) {
+			throw new BadRequest();
 		}
 
 		$newPath = $parentPath . '/' . $newName;
@@ -106,9 +116,9 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 
 		$this->path = $newPath;
 
-		$query = OC_DB::prepare('UPDATE `*PREFIX*properties` SET `propertypath` = ?'
+		$query = \OC_DB::prepare('UPDATE `*PREFIX*properties` SET `propertypath` = ?'
 			. ' WHERE `userid` = ? AND `propertypath` = ?');
-		$query->execute(array($newPath, OC_User::getUser(), $oldPath));
+		$query->execute(array($newPath, \OC_User::getUser(), $oldPath));
 		$this->refreshInfo();
 	}
 
@@ -150,24 +160,24 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 			// If it was null, we need to delete the property
 			if (is_null($propertyValue)) {
 				if (array_key_exists($propertyName, $existing)) {
-					$query = OC_DB::prepare('DELETE FROM `*PREFIX*properties`'
+					$query = \OC_DB::prepare('DELETE FROM `*PREFIX*properties`'
 						. ' WHERE `userid` = ? AND `propertypath` = ? AND `propertyname` = ?');
-					$query->execute(array(OC_User::getUser(), $this->path, $propertyName));
+					$query->execute(array(\OC_User::getUser(), $this->path, $propertyName));
 				}
 			} else {
 				if (strcmp($propertyName, self::GETETAG_PROPERTYNAME) === 0) {
-					\OC\Files\Filesystem::putFileInfo($this->path, array('etag' => $propertyValue));
+					Filesystem::putFileInfo($this->path, array('etag' => $propertyValue));
 				} elseif (strcmp($propertyName, self::LASTMODIFIED_PROPERTYNAME) === 0) {
 					$this->touch($propertyValue);
 				} else {
 					if (!array_key_exists($propertyName, $existing)) {
-						$query = OC_DB::prepare('INSERT INTO `*PREFIX*properties`'
+						$query = \OC_DB::prepare('INSERT INTO `*PREFIX*properties`'
 							. ' (`userid`,`propertypath`,`propertyname`,`propertyvalue`) VALUES(?,?,?,?)');
-						$query->execute(array(OC_User::getUser(), $this->path, $propertyName, $propertyValue));
+						$query->execute(array(\OC_User::getUser(), $this->path, $propertyName, $propertyValue));
 					} else {
-						$query = OC_DB::prepare('UPDATE `*PREFIX*properties` SET `propertyvalue` = ?'
+						$query = \OC_DB::prepare('UPDATE `*PREFIX*properties` SET `propertyvalue` = ?'
 							. ' WHERE `userid` = ? AND `propertypath` = ? AND `propertyname` = ?');
-						$query->execute(array($propertyValue, OC_User::getUser(), $this->path, $propertyName));
+						$query->execute(array($propertyValue, \OC_User::getUser(), $this->path, $propertyName));
 					}
 				}
 			}
@@ -181,9 +191,9 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 	 * removes all properties for this node and user
 	 */
 	public function removeProperties() {
-		$query = OC_DB::prepare('DELETE FROM `*PREFIX*properties`'
+		$query = \OC_DB::prepare('DELETE FROM `*PREFIX*properties`'
 			. ' WHERE `userid` = ? AND `propertypath` = ?');
-		$query->execute(array(OC_User::getUser(), $this->path));
+		$query->execute(array(\OC_User::getUser(), $this->path));
 
 		$this->setPropertyCache(null);
 	}
@@ -201,7 +211,7 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 
 		if (is_null($this->property_cache)) {
 			$sql = 'SELECT * FROM `*PREFIX*properties` WHERE `userid` = ? AND `propertypath` = ?';
-			$result = OC_DB::executeAudited($sql, array(OC_User::getUser(), $this->path));
+			$result = \OC_DB::executeAudited($sql, array(\OC_User::getUser(), $this->path));
 
 			$this->property_cache = array();
 			while ($row = $result->fetchRow()) {
@@ -231,7 +241,7 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 	 */
 	public function getFileId() {
 		if ($this->info->getId()) {
-			$instanceId = OC_Util::getInstanceId();
+			$instanceId = \OC_Util::getInstanceId();
 			$id = sprintf('%08d', $this->info->getId());
 			return $id . $instanceId;
 		}
@@ -259,7 +269,7 @@ abstract class OC_Connector_Sabre_Node implements \Sabre\DAV\INode, \Sabre\DAV\I
 		if ($this->info->isDeletable()) {
 			$p .= 'NV'; // Renameable, Moveable
 		}
-		if ($this->info->getType() === \OCP\Files\FileInfo::TYPE_FILE) {
+		if ($this->info->getType() === FileInfo::TYPE_FILE) {
 			if ($this->info->isUpdateable()) {
 				$p .= 'W';
 			}

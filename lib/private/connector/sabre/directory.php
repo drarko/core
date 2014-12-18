@@ -21,8 +21,19 @@
  *
  */
 
-class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
-	implements \Sabre\DAV\ICollection, \Sabre\DAV\IQuota {
+namespace OC\Connector\Sabre;
+
+use OC\Files\FileInfo;
+use OC\Files\Filesystem;
+use OCP\Files\StorageNotAvailableException;
+use Sabre\DAV\Exception\Forbidden;
+use Sabre\DAV\Exception\NotFound;
+use Sabre\DAV\Exception\ServiceUnavailable;
+use Sabre\DAV\ICollection;
+use Sabre\DAV\IQuota;
+
+class Directory extends Node
+	implements ICollection, IQuota {
 
 	/**
 	 * Creates a new file in the directory
@@ -46,7 +57,8 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 	 *
 	 * @param string $name Name of the file
 	 * @param resource|string $data Initial payload
-	 * @throws \Sabre\DAV\Exception\Forbidden
+	 * @throws Forbidden
+	 * @throws ServiceUnavailable
 	 * @return null|string
 	 */
 	public function createFile($name, $data = null) {
@@ -57,26 +69,26 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 			if (isset($_SERVER['HTTP_OC_CHUNKED'])) {
 
 				// exit if we can't create a new file and we don't updatable existing file
-				$info = OC_FileChunking::decodeName($name);
+				$info = \OC_FileChunking::decodeName($name);
 				if (!$this->fileView->isCreatable($this->path) &&
 						!$this->fileView->isUpdatable($this->path . '/' . $info['name'])) {
-					throw new \Sabre\DAV\Exception\Forbidden();
+					throw new Forbidden();
 				}
 
 			} else {
 				// For non-chunked upload it is enough to check if we can create a new file
 				if (!$this->fileView->isCreatable($this->path)) {
-					throw new \Sabre\DAV\Exception\Forbidden();
+					throw new Forbidden();
 				}
 			}
 
 			$path = $this->fileView->getAbsolutePath($this->path) . '/' . $name;
 			// using a dummy FileInfo is acceptable here since it will be refreshed after the put is complete
-			$info = new \OC\Files\FileInfo($path, null, null, array());
-			$node = new OC_Connector_Sabre_File($this->fileView, $info);
+			$info = new FileInfo($path, null, null, array());
+			$node = new File($this->fileView, $info);
 			return $node->put($data);
-		} catch (\OCP\Files\StorageNotAvailableException $e) {
-			throw new \Sabre\DAV\Exception\ServiceUnavailable($e->getMessage());
+		} catch (StorageNotAvailableException $e) {
+			throw new ServiceUnavailable($e->getMessage());
 		}
 	}
 
@@ -84,21 +96,22 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 	 * Creates a new subdirectory
 	 *
 	 * @param string $name
-	 * @throws \Sabre\DAV\Exception\Forbidden
+	 * @throws Forbidden
+	 * @throws ServiceUnavailable
 	 * @return void
 	 */
 	public function createDirectory($name) {
 		try {
 			if (!$this->info->isCreatable()) {
-				throw new \Sabre\DAV\Exception\Forbidden();
+				throw new Forbidden();
 			}
 
 			$newPath = $this->path . '/' . $name;
 			if(!$this->fileView->mkdir($newPath)) {
-				throw new \Sabre\DAV\Exception\Forbidden('Could not create directory '.$newPath);
+				throw new Forbidden('Could not create directory '.$newPath);
 			}
-		} catch (\OCP\Files\StorageNotAvailableException $e) {
-			throw new \Sabre\DAV\Exception\ServiceUnavailable($e->getMessage());
+		} catch (StorageNotAvailableException $e) {
+			throw new ServiceUnavailable($e->getMessage());
 		}
 	}
 
@@ -107,7 +120,8 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 	 *
 	 * @param string $name
 	 * @param \OCP\Files\FileInfo $info
-	 * @throws \Sabre\DAV\Exception\FileNotFound
+	 * @throws NotFound
+	 * @throws ServiceUnavailable
 	 * @return \Sabre\DAV\INode
 	 */
 	public function getChild($name, $info = null) {
@@ -115,19 +129,19 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 		if (is_null($info)) {
 			try {
 				$info = $this->fileView->getFileInfo($path);
-			} catch (\OCP\Files\StorageNotAvailableException $e) {
-				throw new \Sabre\DAV\Exception\ServiceUnavailable($e->getMessage());
+			} catch (StorageNotAvailableException $e) {
+				throw new ServiceUnavailable($e->getMessage());
 			}
 		}
 
 		if (!$info) {
-			throw new \Sabre\DAV\Exception\NotFound('File with name ' . $path . ' could not be located');
+			throw new NotFound('File with name ' . $path . ' could not be located');
 		}
 
 		if ($info['mimetype'] == 'httpd/unix-directory') {
-			$node = new OC_Connector_Sabre_Directory($this->fileView, $info);
+			$node = new Directory($this->fileView, $info);
 		} else {
-			$node = new OC_Connector_Sabre_File($this->fileView, $info);
+			$node = new File($this->fileView, $info);
 		}
 		return $node;
 	}
@@ -153,9 +167,9 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 			$chunks = array_chunk($paths, 200, false);
 			foreach ($chunks as $pack) {
 				$placeholders = join(',', array_fill(0, count($pack), '?'));
-				$query = OC_DB::prepare( 'SELECT * FROM `*PREFIX*properties`'
+				$query = \OC_DB::prepare( 'SELECT * FROM `*PREFIX*properties`'
 					.' WHERE `userid` = ?' . ' AND `propertypath` IN ('.$placeholders.')' );
-				array_unshift($pack, OC_User::getUser()); // prepend userid
+				array_unshift($pack, \OC_User::getUser()); // prepend userid
 				$result = $query->execute( $pack );
 				while($row = $result->fetchRow()) {
 					$propertypath = $row['propertypath'];
@@ -194,17 +208,17 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 	 * Deletes all files in this directory, and then itself
 	 *
 	 * @return void
-	 * @throws \Sabre\DAV\Exception\Forbidden
+	 * @throws Forbidden
 	 */
 	public function delete() {
 
 		if (!$this->info->isDeletable()) {
-			throw new \Sabre\DAV\Exception\Forbidden();
+			throw new Forbidden();
 		}
 
 		if (!$this->fileView->rmdir($this->path)) {
 			// assume it wasn't possible to remove due to permission issue
-			throw new \Sabre\DAV\Exception\Forbidden();
+			throw new Forbidden();
 		}
 
 	}
@@ -216,14 +230,14 @@ class OC_Connector_Sabre_Directory extends OC_Connector_Sabre_Node
 	 */
 	public function getQuotaInfo() {
 		try {
-			$path = \OC\Files\Filesystem::getView()->getRelativePath($this->info->getPath());
-			$storageInfo = OC_Helper::getStorageInfo($path);
+			$path = Filesystem::getView()->getRelativePath($this->info->getPath());
+			$storageInfo = \OC_Helper::getStorageInfo($path);
 			return array(
 				$storageInfo['used'],
 				$storageInfo['free']
 			);
 		}
-		catch (\OCP\Files\StorageNotAvailableException $e) {
+		catch (StorageNotAvailableException $e) {
 			return array(0, 0);
 		}
 	}
